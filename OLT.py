@@ -150,11 +150,26 @@ class OLT:
 
             if (delta < min_delta):
                 min_delta = delta
-                next_onu_event_time = mssg_event_time
-                next_onu_event_index = i
+            next_onu_event_time = mssg_event_time
+            next_onu_event_index = i
         return (
             next_onu_event_index,
             next_onu_event_time
+        )
+
+    def _advance_progress(self, onu: ONU, new_time: float):
+        """Advance the current message progress for an ONU."""
+        if onu.current_message is None or onu.current_message_progress is None:
+            return
+
+        if new_time >= self.time:
+            delta = new_time - self.time
+        else:
+            delta = new_time + (TIMER_MAX - self.time)
+
+        onu.current_message_progress = min(
+            onu.current_message,
+            onu.current_message_progress + delta,
         )
 
             
@@ -196,6 +211,7 @@ class OLT:
                         ( current_message_ends_at < event_time or
                           (event_time < 0.1 * TIMER_MAX and 0.9 * TIMER_MAX < current_message_ends_at)
                        )):
+                    self._advance_progress(allowed_onu, current_message_ends_at)
                     self.time = current_message_ends_at
                     allowed_onu.dequeue_message()
                     
@@ -215,6 +231,7 @@ class OLT:
                 if (self.verbose):
                     print(f'\ttime: {event_time})')
                     print(f'Message intent from ONU: {event_onu_idx}')
+                self._advance_progress(allowed_onu, event_time)
                 self.time = event_time
                 self.onus[event_onu_idx].enqueue_message()
 
@@ -233,6 +250,7 @@ class OLT:
 
                 event_onu_idx, event_time = self.get_next_message_event()
 
+            self._advance_progress(allowed_onu, window_ends_at)
             self.time = window_ends_at
 
 
